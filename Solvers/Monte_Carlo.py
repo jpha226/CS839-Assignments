@@ -7,7 +7,7 @@
 
 from collections import defaultdict, OrderedDict
 import numpy as np
-from Solvers.Abstract_Solver import AbstractSolver
+from Solvers.Abstract_Solver import AbstractSolver, Statistics
 from lib import plotting
 #env = Blackjack-v0
 
@@ -25,11 +25,11 @@ class MonteCarlo(AbstractSolver):
         # The final action-value function.
         # A nested dictionary that maps state -> (action -> action-value).
         self.Q = defaultdict(lambda: np.zeros(env.action_space.n))
-        # Keeps track of sum and count of returns for each state
+        # Keeps track of sum and count of returns for each state-action pair
         # to calculate an average. We could use an array to save all
         # returns (like in the book) but that's memory inefficient.
-        self.returns_sum = defaultdict(float)
-        self.returns_count = defaultdict(float)
+        self.returns_sum = defaultdict(lambda: np.zeros(env.action_space.n))
+        self.returns_count = defaultdict(lambda: np.zeros(env.action_space.n))
 
 
 
@@ -65,6 +65,7 @@ class MonteCarlo(AbstractSolver):
         ################################
 
 
+
     def __str__(self):
         return "Monte Carlo"
 
@@ -89,6 +90,7 @@ class MonteCarlo(AbstractSolver):
             ################################
             #   YOUR IMPLEMENTATION HERE   #
             ################################
+            raise NotImplementedError
 
 
         return policy_fn
@@ -111,6 +113,8 @@ class MonteCarlo(AbstractSolver):
             ################################
             #   YOUR IMPLEMENTATION HERE   #
             ################################
+
+            raise NotImplementedError
 
 
         return policy_fn
@@ -145,7 +149,7 @@ class OffPolicyMC(MonteCarlo):
             Run a single episode of Monte Carlo Control Off-Policy Control using Weighted Importance Sampling.
 
             Use:
-                elf.env: OpenAI environment.
+                self.env: OpenAI environment.
                 self.options.steps: steps per episode
                 self.behavior_policy(state): returns a soft policy which is the
                     behavior policy (act according to this policy)

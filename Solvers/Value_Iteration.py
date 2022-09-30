@@ -35,13 +35,13 @@ class ValueIteration(AbstractSolver):
                 self.env.nA:
                     number of actions in the environment
 
-                for probability, next_state, reward, done in self.P[state][action]:
+                for probability, next_state, reward, done in self.env.P[state][action]:
                     `probability` will be probability of `next_state` actually being the next state
                     `reward` is the short-term/immediate reward for achieving that next state
                     `done` is a boolean of wether or not that next state is the last/terminal state
 
                     Every action has a chance (at least theortically) of different outcomes (states)
-                    Which is why `self.P[state][action]` is a list of outcomes and not a single outcome
+                    Which is why `self.env.P[state][action]` is a list of outcomes and not a single outcome
 
                 self.options.gamma:
                     The discount factor (gamma from the slides)

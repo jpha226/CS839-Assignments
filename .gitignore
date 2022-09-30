@@ -4,5 +4,4 @@ __pycache__
 original/
 venv
 autograder.py
-lib/*
 
