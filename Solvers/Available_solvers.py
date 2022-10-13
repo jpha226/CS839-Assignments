@@ -5,7 +5,7 @@
 # This CSCE-689 RL assignment codebase was developed at Texas A&M University.
 # The core code base was developed by Guni Sharon (guni@tamu.edu).
 
-solvers = ['random', 'vi', 'pi', 'mc','avi', 'mcis', 'ql', 'sarsa', 'aql', 'dqn', 'reinforce', 'a2c']
+solvers = ['random', 'vi', 'pi', 'mc','avi', 'mcis', 'ql', 'sarsa', 'aql', 'dqn', 'reinforce', 'a2c', 'asarsa']
 
 def get_solver_class(name):
     if name == solvers[0]:
@@ -44,5 +44,8 @@ def get_solver_class(name):
     elif name == solvers[11]:
         from Solvers.A2C import A2C
         return A2C
+    elif name == 'asarsa':
+        from Solvers.SARSA import ApproxSarsa
+        return ApproxSarsa
     else:
         assert False, "unknown solver name {}. solver must be from {}".format(name, str(solvers))
