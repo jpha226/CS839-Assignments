@@ -144,7 +144,7 @@ class ApproxSarsa(Sarsa):
             pass
         return policy_fn
 
-    def epsilon_greedy_action(self, state):
+    def create_epsilon_greedy_policy(self, state):
         """
         Return an epsilon-greedy action based on the current Q approximations and
         epsilon.

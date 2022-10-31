@@ -6,91 +6,27 @@
 # The core code base was developed by Guni Sharon (guni@tamu.edu).
 
 import numpy as np
-from keras import backend as K
-from keras.layers import Dense, Softmax, Input
-from keras.optimizers import Adam
-from keras.models import Model
-
-
-from Solvers.Abstract_Solver import AbstractSolver
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+import torch.optim as optim
+from Solvers.Abstract_Solver import AbstractSolver, Statistics
+from Solvers.REINFORCE import ActorCritic
 from lib import plotting
-
-
-def actor_loss():
-    def loss(advantage, predicted_output):
-        """
-            The policy gradient loss function.
-            Note that you are required to define the Loss^PG
-            which should be the integral of the policy gradient
-            The "returns" is the one-hot encoded (return - baseline) value for each action a_t
-            ('0' for unchosen actions).
-
-            args:
-                advantage: advantage of each action a_t (one-hot encoded).
-                predicted_output: Predicted actions (action probabilities).
-
-            Use:
-                K.log: Element-wise log.
-                K.sum: Sum of a tensor.
-        """
-        ################################
-        #   YOUR IMPLEMENTATION HERE   #
-        ################################
-        raise NotImplementedError
-
-    return loss
-
-
-def critic_loss():
-    def loss(advantage, predicted_output):
-        """
-            The integral of the critic gradient
-
-            args:
-                advantage: advantage of each action a_t (one-hot encoded).
-                predicted_output: Predicted state value.
-
-            Use:
-                K.sum: Sum of a tensor.
-        """
-        ################################
-        #   YOUR IMPLEMENTATION HERE   #
-        ################################
-        raise NotImplementedError
-
-    return loss
 
 
 class A2C(AbstractSolver):
 
     def __init__(self, env, options):
         super().__init__(env, options)
-        self.actor_critic = self.build_actor_critic()
+        self.state_size = self.env.observation_space.shape[0]
+        self.action_size = self.env.action_space.n
+        self.trajectory = []
+        self.actor_critic = ActorCritic(self.state_size, self.action_size,
+                                        layers=options.layers)
         self.policy = self.create_greedy_policy()
-
-    def build_actor_critic(self):
-        layers = self.options.layers
-
-        states = Input(shape=self.env.observation_space.shape)
-        z = states
-        for l in layers[:-1]:
-            z = Dense(l, activation='relu')(z)
-
-        # Actor and critic have a seperated final fully connected layer
-        z_a = Dense(layers[-1], activation='tanh')(z)
-        z_a = Dense(self.env.action_space.n, activation='tanh')(z_a)
-        z_c = Dense(layers[-1], activation='relu')(z)
-
-        probs = Softmax(name='actor_output')(z_a)
-        value = Dense(1, activation='linear', name='critic_output')(z_c)
-
-        model = Model(inputs=[states], outputs=[probs, value])
-        model.compile(optimizer=Adam(lr=self.options.alpha),
-                      loss={'actor_output': actor_loss(),
-                            'critic_output': critic_loss()},
-                      loss_weights={'actor_output': 1.0, 'critic_output': 1.0})
-
-        return model
+        self.optimizer = optim.SGD(self.actor_critic.parameters(),
+                                   options.alpha)
 
     def create_greedy_policy(self):
         """
@@ -103,7 +39,11 @@ class A2C(AbstractSolver):
         """
 
         def policy_fn(state):
-            return np.argmax(self.actor_critic.predict([[state]])[0][0])
+            return np.argmax(
+                self.actor_critic.action_probs(
+                    torch.tensor(state, dtype=torch.float32)
+                ).detach().numpy()
+            )
 
         return policy_fn
 
@@ -111,40 +51,98 @@ class A2C(AbstractSolver):
         """
         Run a single episode of the A2C algorithm
 
-        Use:
-            self.actor_critic: actor-critic network that is being learned.
-            self.policy(state): Returns action probabilities.
+        Useful functions and objects:
+            self.actor_critic: Policy / value network that is being learned.
+            self.actor_critic.action_probs(state): Returns action probabilities
+                for a given torch.tensor state.
             self.options.steps: Maximal number of steps per episode.
             np.random.choice(len(probs), probs): Randomly select an element
-                from probs (a list) based on the probability distribution in probs.
+                from probs (a list) based on the probability distribution in
+                probs.
             self.step(action): Performs an action in the env.
             np.zeros(): Return an array of zeros with the a given shape.
             self.env.reset(): Resets the env.
             self.options.gamma: Gamma discount factor.
-            self.actor_critic.fit(): Train the policy network at the end of an episode on the
-                observed transitions for exactly 1 epoch.
-            self.actor_critic.predict([[state]])[1][0]: the predicted state value for 'state'
+            self.options.n: n for n-step returns.
         """
 
         state = self.env.reset()
-        states=[]
+        states = []
         actions = []
-        deltas=[]
-        for _ in range(self.options.steps):
-        ################################
-        #   YOUR IMPLEMENTATION HERE   #
-        ################################
+        rewards = []
+
+        for t in range(self.options.steps):
+
+            probs = self.actor_critic.action_probs(
+                torch.tensor(state, dtype=torch.float32)
+            ).detach().numpy()
+            action = np.random.choice(len(probs), p=probs)
+
+            next_state, reward, done, _ = self.step(action)
+            states.append(state)
+            actions.append(action)
+            rewards.append(reward)
+
+            if t > 0 and t % self.options.n == 0:
+                self.train(states, actions, rewards, next_state, done)
+                states, actions, rewards = [], [], []
+
+            state = next_state
+
+            if done:
+                break
+
+        if len(states) > 1:
+            self.train(states, actions, rewards, next_state, done)
+
+    def train(self, states, actions, rewards, next_state, done):
+        """
+        Perform single A2C update.
+
+        states: list of states.
+        actions: list of actions taken.
+        rewards: list of rewards received.
+        next_state: next state received after final action.
+        done: if episode ended after last action was taken.
+        """
+
+        states_tensor = torch.tensor(states, dtype=torch.float32)
 
         # One-hot encoding for actions
         actions_one_hot = np.zeros([len(actions), self.env.action_space.n])
         actions_one_hot[np.arange(len(actions)), actions] = 1
+        actions_one_hot = torch.tensor(actions_one_hot)
 
-        deltas = np.array(deltas)
+        ################################
+        #   YOUR IMPLEMENTATION HERE   #
+        ################################
+        # Compute returns
+        returns = np.zeros_like(rewards)
+        # TODO: Compute bootstrapped returns for each state-action in states
+        # and actions
+        returns = torch.tensor(returns, dtype=torch.float32)
 
-        # Update actor critic
-        self.actor_critic.fit(x=[np.array(states)],
-                              y={'actor_output': deltas * actions_one_hot, 'critic_output': deltas},
-                              epochs=1, batch_size=self.options.batch_size, verbose=0)
+        values = self.actor_critic.value(states_tensor)
+
+        # TODO: Compute advantages for each state-action pair in states and
+        # actions.
+
+        log_probs = torch.sum(
+            self.actor_critic.log_probs(states_tensor) * actions_one_hot,
+            axis=-1
+        )
+
+        # Compute actor and critic losses
+        ################################
+        #   YOUR IMPLEMENTATION HERE   #
+        ################################
+        # TODO: compute these losses.
+        # Useful functions: torch.square for critic loss.
+        policy_loss = 0.0
+        critic_loss = 0.0
+        loss = policy_loss.mean() + critic_loss.mean()
+        loss.backward()
+        self.optimizer.step()
 
     def __str__(self):
         return "A2C"

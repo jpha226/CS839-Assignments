@@ -63,6 +63,8 @@ def build_parser():
                       help='Copy parameters from the Q estimator to the target estimator every N steps.')
     parser.add_option("-b", "--batch_size", type="int", dest="batch_size", default=32,
                       help='Size of batches to sample from the replay memory')
+    parser.add_option("-n", "--n_step", type="int", dest="n", default=1,
+                      help='Value of n for n-step returns')
     parser.add_option('--no-plots', help='Option to disable plots if the solver results any',
             dest = 'disable_plots', default = False, action = 'store_true')
     return parser
